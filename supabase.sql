@@ -32,3 +32,6 @@ create policy "public insert feedback"
   on public.feedback
   for insert
   with check (true);
+
+-- Grant privileges to anon/authenticated roles (required for client inserts/selects)
+grant select, insert on table public.feedback to anon, authenticated;
