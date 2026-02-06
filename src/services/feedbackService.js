@@ -39,9 +39,12 @@ function generateNumericId(clientDate) {
 }
 
 async function safeCount(builder) {
-  const { count, error } = await builder.select('id', { count: 'exact', head: true });
-  if (error) throw error;
-  return count || 0;
+  const { count, error } = await builder.select('id', { count: 'exact' });
+  if (!error && typeof count === 'number') return count;
+
+  const { data, error: err2 } = await builder.select('id');
+  if (err2) return 0;
+  return Array.isArray(data) ? data.length : 0;
 }
 
 function baseQuery() {
