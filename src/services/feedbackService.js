@@ -151,22 +151,22 @@ export async function submitFeedback(grau, { clientDate } = {}) {
 
 export async function getPublicSummary() {
   const today = formatDateYYYYMMDD(new Date());
-  const total = await safeCount(baseQuery());
-  const msQ = baseQuery().eq('data', today).eq('grau_satisfacao', 'muito_satisfeito');
-  const sQ = baseQuery().eq('data', today).eq('grau_satisfacao', 'satisfeito');
-  const iQ = baseQuery().eq('data', today).eq('grau_satisfacao', 'insatisfeito');
+  const [all, todayCounts] = await Promise.all([
+    getTotalsAllTime(),
+    getTotalsForDay(today)
+  ]);
 
-  const todayCounts = {
-    muito_satisfeito: await safeCount(msQ),
-    satisfeito: await safeCount(sQ),
-    insatisfeito: await safeCount(iQ)
-  };
   const todayTotal =
-    todayCounts.muito_satisfeito + todayCounts.satisfeito + todayCounts.insatisfeito;
+    (todayCounts.muito_satisfeito || 0) +
+    (todayCounts.satisfeito || 0) +
+    (todayCounts.insatisfeito || 0);
 
   let lastId = null;
   try {
-    const { data } = await baseQuery().select('row_id, id').order('created_at', { ascending: false }).limit(1);
+    const { data } = await baseQuery()
+      .select('row_id, id')
+      .order('created_at', { ascending: false })
+      .limit(1);
     const row = data?.[0];
     lastId = row?.row_id || row?.id || null;
   } catch {
@@ -177,34 +177,48 @@ export async function getPublicSummary() {
     date: today,
     today: todayCounts,
     todayTotal,
-    total,
+    total: all.total || 0,
     lastId
   };
 }
 
 export async function getTotalsAllTime() {
-  const msQ = baseQuery().eq('grau_satisfacao', 'muito_satisfeito');
-  const sQ = baseQuery().eq('grau_satisfacao', 'satisfeito');
-  const iQ = baseQuery().eq('grau_satisfacao', 'insatisfeito');
-
+  const { data, error } = await baseQuery().select('grau_satisfacao');
+  if (error || !Array.isArray(data)) {
+    return { muito_satisfeito: 0, satisfeito: 0, insatisfeito: 0, total: 0 };
+  }
+  let ms = 0;
+  let s = 0;
+  let i = 0;
+  for (const row of data) {
+    if (row.grau_satisfacao === 'muito_satisfeito') ms += 1;
+    else if (row.grau_satisfacao === 'satisfeito') s += 1;
+    else if (row.grau_satisfacao === 'insatisfeito') i += 1;
+  }
   return {
-    muito_satisfeito: await safeCount(msQ),
-    satisfeito: await safeCount(sQ),
-    insatisfeito: await safeCount(iQ),
-    total: await safeCount(baseQuery())
+    muito_satisfeito: ms,
+    satisfeito: s,
+    insatisfeito: i,
+    total: ms + s + i
   };
 }
 
 export async function getTotalsForDay(dateStr) {
-  const msQ = baseQuery().eq('data', dateStr).eq('grau_satisfacao', 'muito_satisfeito');
-  const sQ = baseQuery().eq('data', dateStr).eq('grau_satisfacao', 'satisfeito');
-  const iQ = baseQuery().eq('data', dateStr).eq('grau_satisfacao', 'insatisfeito');
-
-  return {
-    muito_satisfeito: await safeCount(msQ),
-    satisfeito: await safeCount(sQ),
-    insatisfeito: await safeCount(iQ)
-  };
+  const { data, error } = await baseQuery()
+    .select('grau_satisfacao')
+    .eq('data', dateStr);
+  if (error || !Array.isArray(data)) {
+    return { muito_satisfeito: 0, satisfeito: 0, insatisfeito: 0 };
+  }
+  let ms = 0;
+  let s = 0;
+  let i = 0;
+  for (const row of data) {
+    if (row.grau_satisfacao === 'muito_satisfeito') ms += 1;
+    else if (row.grau_satisfacao === 'satisfeito') s += 1;
+    else if (row.grau_satisfacao === 'insatisfeito') i += 1;
+  }
+  return { muito_satisfeito: ms, satisfeito: s, insatisfeito: i };
 }
 
 export async function getTotalsForRange(startDateStr, endDateStr, grau) {
